@@ -22,7 +22,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--resource", "-r", type=str, choices=download_choices,
                         help="specify whether you want to download ms coco dataset or pretrained models",
-                        default=download_choices[0])
+                        default=download_choices[1])
     args = parser.parse_args()
 
     # step1: download the resource to local filesystem
