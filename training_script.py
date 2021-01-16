@@ -154,7 +154,7 @@ if __name__ == "__main__":
     model_binaries_path = os.path.join(os.path.dirname(__file__), 'models', 'binaries')
     checkpoints_root_path = os.path.join(os.path.dirname(__file__), 'models', 'checkpoints')
     image_size = 256  # training images from MS COCO are resized to image_size x image_size
-    batch_size = 4
+    batch_size = 16
 
     assert os.path.exists(dataset_path), f'MS COCO missing. Download the dataset using resource_downloader.py script.'
     os.makedirs(model_binaries_path, exist_ok=True)
@@ -167,8 +167,8 @@ if __name__ == "__main__":
     parser.add_argument("--style_img_name", type=str, help="style image name that will be used for training",
                         default='romanesco2.jpg')
     parser.add_argument("--content_weight", type=float, help="weight factor for content loss",
-                        default=1e0)  # you don't need to change this one just play with style loss
-    parser.add_argument("--style_weight", type=float, help="weight factor for style loss", default=4e5)
+                        default=1e5)  # you don't need to change this one just play with style loss
+    parser.add_argument("--style_weight", type=float, help="weight factor for style loss", default=3e3)
     parser.add_argument("--tv_weight", type=float, help="weight factor for total variation loss", default=0)
     parser.add_argument("--num_of_epochs", type=int, help="number of training epochs ", default=1)
     parser.add_argument("--subset_size", type=int,
@@ -201,4 +201,3 @@ if __name__ == "__main__":
 
     # Original J.Johnson's training with improved transformer net architecture
     train(training_config)
-
