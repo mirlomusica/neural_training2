@@ -11,7 +11,9 @@ from models.definitions.perceptual_loss_net import PerceptualLossNet
 from models.definitions.transformer_net import TransformerNet
 import utils.utils as utils
 
-def build_loss(neural_net, optimizing_img, target_representations, content_feature_maps_index, style_feature_maps_indices, config):
+
+def build_loss(neural_net, optimizing_img, target_representations, content_feature_maps_index,
+               style_feature_maps_indices, config):
     target_content_representation = target_representations[0]
     target_style_representation = target_representations[1]
 
@@ -21,16 +23,20 @@ def build_loss(neural_net, optimizing_img, target_representations, content_featu
     content_loss = torch.nn.MSELoss(reduction='mean')(target_content_representation, current_content_representation)
 
     style_loss = 0.0
-    current_style_representation = [utils.gram_matrix(x) for cnt, x in enumerate(current_set_of_feature_maps) if cnt in style_feature_maps_indices]
+    current_style_representation = [utils.gram_matrix(x) for cnt, x in enumerate(current_set_of_feature_maps) if
+                                    cnt in style_feature_maps_indices]
     for gram_gt, gram_hat in zip(target_style_representation, current_style_representation):
         style_loss += torch.nn.MSELoss(reduction='sum')(gram_gt[0], gram_hat[0])
     style_loss /= len(target_style_representation)
 
     tv_loss = utils.total_variation(optimizing_img)
 
-    total_loss = config['content_weight'] * content_loss + config['style_weight'] * style_loss + config['tv_weight'] * tv_loss
+    total_loss = config['content_weight'] * content_loss + config['style_weight'] * style_loss + config[
+        'tv_weight'] * tv_loss
 
     return total_loss, content_loss, style_loss, tv_loss
+
+
 def train(training_config):
     writer = SummaryWriter()  # (tensorboard) writer will output to ./runs/ directory by default
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -42,12 +48,13 @@ def train(training_config):
     transformer_net = TransformerNet().train().to(device)
     perceptual_loss_net = PerceptualLossNet(requires_grad=False).to(device)
 
-    optimizer = LBFGS(transformer_net.parameters())
+    optimizer = LBFGS(transformer_net.parameters(), line_search_fn='strong_wolfe')
 
     # Calculate style image's Gram matrices (style representation)
     # Built over feature maps as produced by the perceptual net - VGG16
     style_img_path = os.path.join(training_config['style_images_path'], training_config['style_img_name'])
-    style_img = utils.prepare_img(style_img_path, target_shape=None, device=device, batch_size=training_config['batch_size'])
+    style_img = utils.prepare_img(style_img_path, target_shape=None, device=device,
+                                  batch_size=training_config['batch_size'])
     style_img_set_of_feature_maps = perceptual_loss_net(style_img)
     target_style_representation = [utils.gram_matrix(x) for x in style_img_set_of_feature_maps]
 
@@ -68,7 +75,8 @@ def train(training_config):
             # step3: Calculate content representations and content loss
             target_content_representation = content_batch_set_of_feature_maps.relu2_2
             current_content_representation = stylized_batch_set_of_feature_maps.relu2_2
-            content_loss = training_config['content_weight'] * torch.nn.MSELoss(reduction='mean')(target_content_representation, current_content_representation)
+            content_loss = training_config['content_weight'] * torch.nn.MSELoss(reduction='mean')(
+                target_content_representation, current_content_representation)
 
             # step4: Calculate style representation and style loss
             style_loss = 0.0
@@ -89,9 +97,8 @@ def train(training_config):
                 nonlocal total_loss
                 optimizer.zero_grad()
                 return total_loss
-            optimizer.step(closure)
 
-            optimizer.zero_grad()  # clear gradients for the next round
+            optimizer.step(closure)
 
             #
             # Logging and checkpoint creation
@@ -105,7 +112,10 @@ def train(training_config):
                 writer.add_scalar('Loss/content-loss', content_loss.item(), len(train_loader) * epoch + batch_id + 1)
                 writer.add_scalar('Loss/style-loss', style_loss.item(), len(train_loader) * epoch + batch_id + 1)
                 writer.add_scalar('Loss/tv-loss', tv_loss.item(), len(train_loader) * epoch + batch_id + 1)
-                writer.add_scalars('Statistics/min-max-mean-median', {'min': torch.min(stylized_batch), 'max': torch.max(stylized_batch), 'mean': torch.mean(stylized_batch), 'median': torch.median(stylized_batch)}, len(train_loader) * epoch + batch_id + 1)
+                writer.add_scalars('Statistics/min-max-mean-median',
+                                   {'min': torch.min(stylized_batch), 'max': torch.max(stylized_batch),
+                                    'mean': torch.mean(stylized_batch), 'median': torch.median(stylized_batch)},
+                                   len(train_loader) * epoch + batch_id + 1)
                 # log stylized image
                 if batch_id % training_config['image_log_freq'] == 0:
                     stylized = utils.post_process_image(stylized_batch[0].detach().to('cpu').numpy())
@@ -113,10 +123,12 @@ def train(training_config):
                     writer.add_image('stylized_img', stylized, len(train_loader) * epoch + batch_id + 1)
 
             if training_config['console_log_freq'] is not None and batch_id % training_config['console_log_freq'] == 0:
-                print(f'time elapsed={(time.time()-ts)/60:.2f}[min]|epoch={epoch + 1}|batch=[{batch_id + 1}/{len(train_loader)}]|c-loss={acc_content_loss / training_config["console_log_freq"]}|s-loss={acc_style_loss / training_config["console_log_freq"]}|tv-loss={acc_tv_loss / training_config["console_log_freq"]}|total loss={(acc_content_loss + acc_style_loss + acc_tv_loss) / training_config["console_log_freq"]}')
+                print(
+                    f'time elapsed={(time.time() - ts) / 60:.2f}[min]|epoch={epoch + 1}|batch=[{batch_id + 1}/{len(train_loader)}]|c-loss={acc_content_loss / training_config["console_log_freq"]}|s-loss={acc_style_loss / training_config["console_log_freq"]}|tv-loss={acc_tv_loss / training_config["console_log_freq"]}|total loss={(acc_content_loss + acc_style_loss + acc_tv_loss) / training_config["console_log_freq"]}')
                 acc_content_loss, acc_style_loss, acc_tv_loss = [0., 0., 0.]
 
-            if training_config['checkpoint_freq'] is not None and (batch_id + 1) % training_config['checkpoint_freq'] == 0:
+            if training_config['checkpoint_freq'] is not None and (batch_id + 1) % training_config[
+                'checkpoint_freq'] == 0:
                 training_state = utils.get_training_metadata(training_config)
                 training_state["state_dict"] = transformer_net.state_dict()
                 training_state["optimizer_state"] = optimizer.state_dict()
@@ -152,17 +164,24 @@ if __name__ == "__main__":
     #
     parser = argparse.ArgumentParser()
     # training related
-    parser.add_argument("--style_img_name", type=str, help="style image name that will be used for training", default='edtaonisl.jpg')
-    parser.add_argument("--content_weight", type=float, help="weight factor for content loss", default=1e0)  # you don't need to change this one just play with style loss
+    parser.add_argument("--style_img_name", type=str, help="style image name that will be used for training",
+                        default='romanesco2.jpg')
+    parser.add_argument("--content_weight", type=float, help="weight factor for content loss",
+                        default=1e0)  # you don't need to change this one just play with style loss
     parser.add_argument("--style_weight", type=float, help="weight factor for style loss", default=4e5)
     parser.add_argument("--tv_weight", type=float, help="weight factor for total variation loss", default=0)
-    parser.add_argument("--num_of_epochs", type=int, help="number of training epochs ", default=2)
-    parser.add_argument("--subset_size", type=int, help="number of MS COCO images (NOT BATCHES) to use, default is all (~83k)(specified by None)", default=None)
+    parser.add_argument("--num_of_epochs", type=int, help="number of training epochs ", default=1)
+    parser.add_argument("--subset_size", type=int,
+                        help="number of MS COCO images (NOT BATCHES) to use, default is all (~83k)(specified by None)",
+                        default=20000)
     # logging/debugging/checkpoint related (helps a lot with experimentation)
-    parser.add_argument("--enable_tensorboard", type=bool, help="enable tensorboard logging (scalars + images)", default=True)
-    parser.add_argument("--image_log_freq", type=int, help="tensorboard image logging (batch) frequency - enable_tensorboard must be True to use", default=100)
+    parser.add_argument("--enable_tensorboard", type=bool, help="enable tensorboard logging (scalars + images)",
+                        default=True)
+    parser.add_argument("--image_log_freq", type=int,
+                        help="tensorboard image logging (batch) frequency - enable_tensorboard must be True to use",
+                        default=100)
     parser.add_argument("--console_log_freq", type=int, help="logging to output console (batch) frequency", default=500)
-    parser.add_argument("--checkpoint_freq", type=int, help="checkpoint model saving (batch) frequency", default=2000)
+    parser.add_argument("--checkpoint_freq", type=int, help="checkpoint model saving (batch) frequency", default=500)
     args = parser.parse_args()
 
     checkpoints_path = os.path.join(checkpoints_root_path, args.style_img_name.split('.')[0])
